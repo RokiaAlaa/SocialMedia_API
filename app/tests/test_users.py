@@ -41,6 +41,37 @@ class TestUserProfiles:
         assert data['full_name'] == "New Name"
         assert data['bio'] == 'New bio'
 
+    def test_update_password(self, client, test_user, user_headers):
+        """Test password update"""
+
+        response = client.put(
+            f'/api/v1/users/{test_user.username}',
+            headers=user_headers,
+            json={'password': 'newpassword123'}
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        response = client.post(
+            '/api/v1/auth/login',
+            data={
+                'username': test_user.email,
+                'password': 'newpassword123'
+            }
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+
+        response = client.post(
+            '/api/v1/auth/login',
+            data={
+                'username': test_user.email,
+                'password': 'testpass123'
+            }
+        )
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
     def test_update_other_user_profile_forbidden(self, client, test_user, test_user2, user_headers):
         """Test updating another user's profile (should fail)"""
 

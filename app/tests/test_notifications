@@ -1,0 +1,232 @@
+import pytest
+from fastapi import status
+
+class TestNotifications:
+    """Test notification endpoints"""
+
+    def test_get_notifications(self, client, user_headers):
+        """Test getting notifications"""
+
+        response = client.get('/api/v1/notifications', headers=user_headers)
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert isinstance(data, list)
+
+    def test_get_notifications_unauthorized(self, client):
+        """Test getting notifications without auth"""
+
+        response = client.get('/api/v1/notifications')
+
+        assert response.status_code == status.HTTP_401_UNAUTHORIZED
+
+    def test_get_unread_count(self, client, user_headers):
+        """Test getting unread notification count"""
+
+        response = client.get('/api/v1/notifications/unread_count', headers=user_headers)
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert 'unread_count' in data
+        assert isinstance(data['unread_count'], int)
+
+    def test_mark_notification_read(self, client, user_headers, test_user, db):
+        """Test marking notification as read"""
+
+        from app.models.notification import Notification, NotificationType
+        notification = Notification(
+            user_id=test_user.id,
+            sender_id=test_user.id,
+            type=NotificationType.LIKE,
+            is_read=False
+        )
+        db.add(notification)
+        db.commit()
+        db.refresh(notification)
+
+
+        response = client.put(
+            f'/api/v1/notifications/{notification.id}/read', 
+            headers=user_headers
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data['is_read'] == True
+
+    def test_mark_other_user_notification_forbidden(self, client, user_headers, test_user2, db):
+        """Test marking another user's notification"""
+
+        from app.models.notification import Notification, NotificationType
+        notification = Notification(
+            user_id=test_user2.id,
+            sender_id=test_user2.id,
+            type=NotificationType.LIKE,
+            is_read=False
+        )
+        db.add(notification)
+        db.commit()
+        db.refresh(notification)
+
+
+        response = client.put(
+            f'/api/v1/notifications/{notification.id}/read', 
+            headers=user_headers
+        )
+
+        assert response.status_code == status.HTTP_404_NOT_FOUND
+
+    def test_mark_all_read(self, client, user_headers, test_user, db):
+        """Test marking all notifications as read"""
+
+        from app.models.notification import Notification, NotificationType
+
+        for _ in range(3):
+            notification = Notification(
+                user_id=test_user.id,
+                sender_id=test_user.id,
+                type=NotificationType.LIKE,
+                is_read=False
+            )
+            db.add(notification)
+        db.commit()
+
+        response = client.put(f'/api/v1/notifications/read_all', headers=user_headers)
+        assert response.status_code == status.HTTP_200_OK
+
+
+        response = client.get('/api/v1/notifications/unread_count', headers=user_headers)
+        data = response.json()
+        assert data['unread_count'] == 0
+
+    def test_delete_notification(self, client, user_headers, test_user, db):
+        """Test deleting notification"""
+
+        from app.models.notification import Notification, NotificationType
+        notification = Notification(
+            user_id=test_user.id,
+            sender_id=test_user.id,
+            type=NotificationType.LIKE,
+            is_read=False
+        )
+        db.add(notification)
+        db.commit()
+
+        response = client.delete(
+            f'/api/v1/notifications/{notification.id}', 
+            headers=user_headers
+        )
+
+        assert response.status_code == status.HTTP_204_NO_CONTENT
+
+    def test_filter_unread_notifications(self, client, user_headers, test_user, db):
+        """Test marking notification as read"""
+
+        from app.models.notification import Notification, NotificationType
+        
+        read_notif = Notification(
+            user_id=test_user.id,
+            sender_id=test_user.id,
+            type=NotificationType.LIKE,
+            is_read=True
+        )
+
+        unread_notif = Notification(
+            user_id=test_user.id,
+            sender_id=test_user.id,
+            type=NotificationType.COMMENT,
+            is_read=False
+        )
+
+        db.add_all([read_notif, unread_notif])
+        db.commit()
+
+
+        response = client.get(
+            f'/api/v1/notifications?unread_only=True', 
+            headers=user_headers
+        )
+
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert all(not notif['is_read'] for notif in data)
+
+class TestNotificationCreation:
+    """Test that actions create notifications"""
+
+    def test_like_creates_notification(self, client, test_post, user2_headers, db, test_user, test_user2):
+        """Test that liking creates notification"""
+
+        response = client.post(
+            f'api/v1/posts/{test_post.id}/like',
+            headers=user2_headers,
+            json={'reaction_type': 'like'}
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+        from app.models.notification import Notification, NotificationType
+        notification = db.query(Notification).filter(
+            Notification.user_id == test_user.id,
+            Notification.sender_id == test_user2.id,
+            Notification.type == NotificationType.LIKE,
+            Notification.post_id == test_post.id,
+        ).first()
+
+        assert notification is not None
+
+    def test_comment_creates_notification(self, client, test_post, user2_headers, db, test_user, test_user2):
+        """Test that commenting creates notification"""
+
+        response = client.post(
+            f'api/v1/posts/{test_post.id}/comments',
+            headers=user2_headers,
+            json={'content': 'Test comment'}
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+        from app.models.notification import Notification, NotificationType
+        notification = db.query(Notification).filter(
+            Notification.user_id == test_user.id,
+            Notification.sender_id == test_user2.id,
+            Notification.type == NotificationType.COMMENT,
+            Notification.post_id == test_post.id,
+        ).first()
+
+        assert notification is not None
+
+    def test_follow_creates_notification(self, client, user2_headers, db, test_user, test_user2):
+        """Test that following creates notification"""
+
+        response = client.post(
+            f'api/v1/users/{test_user.username}/follow',
+            headers=user2_headers,
+        )
+
+        assert response.status_code == status.HTTP_201_CREATED
+
+        from app.models.notification import Notification, NotificationType
+        notification = db.query(Notification).filter(
+            Notification.user_id == test_user.id,
+            Notification.sender_id == test_user2.id,
+            Notification.type == NotificationType.FOLLOW,
+        ).first()
+
+        assert notification is not None
+
+    def test_self_like_no_notification(self, client, test_post, user_headers, db):
+        """Test that liking own post doesn't create notification"""
+
+        client.post(
+            f'api/v1/posts/{test_post.id}/like',
+            headers=user_headers,
+            json={'reaction_type': 'like'}
+        )
+
+        from app.models.notification import Notification
+        notification_count = db.query(Notification).filter(
+            Notification.post_id == test_post.id,
+        ).count()
+
+        assert notification_count == 0

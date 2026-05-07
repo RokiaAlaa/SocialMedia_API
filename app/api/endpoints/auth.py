@@ -76,48 +76,6 @@ async def read_current_user(current_user: User = Depends(get_current_active_user
     """Get current user profile"""
     return current_user
 
-
-@router.put("/me", response_model=UserSchema)
-async def update_current_user(user_update: UserUpdate, current_user: User = Depends(get_current_active_user), db: Session = Depends(get_db)):
-
-    """Update current user profile"""
-
-    if user_update.email:
-        existing = db.query(User).filter(user_update.email == User.email, User.id != current_user.id).first()
-
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Email already registered"
-            )
-        
-        current_user.email = user_update.email
-
-
-    if user_update.username:
-        existing = db.query(User).filter(user_update.username == User.username, User.id != current_user.id).first()
-
-        if existing:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST, detail="Username already taken"
-            )
-        
-        current_user.username = user_update.username
-
-    if user_update.fullname:
-        current_user.fullname = user_update.fullname
-
-    if user_update.bio:
-        current_user.bio = user_update.bio
-
-    if user_update.password:
-        current_user.hashed_password = hash_password(user_update.password)
-
-    db.commit()
-    db.refresh(current_user)
-
-    return current_user
-
-
 @router.post("/logout")
 async def logout(token: str =  Depends(oauth2_scheme), current_user: User = Depends(get_current_active_user)):
 
