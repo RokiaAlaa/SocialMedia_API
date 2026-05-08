@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
@@ -6,15 +6,18 @@ from app.api.deps.database import get_db
 from app.api.deps.auth import get_current_active_user
 from app.models.user import User
 from app.models.follow import Follow
-from app.schemas.follow import Follow as FollowSchema, FollowResponse, FollowWithUser
+from app.schemas.follow import FollowResponse
 from app.schemas.user import UserPublic
 from app.services.notification import create_notification
 from app.models.notification import NotificationType
+from app.core.limiter import limiter
 
 router = APIRouter()
 
 @router.post("/users/{username}/follow", response_model=FollowResponse, status_code=status.HTTP_201_CREATED)
+@limiter.limit('60/minute')
 async def follow_user(
+    request: Request,
     username: str,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
@@ -76,7 +79,9 @@ async def follow_user(
     )
 
 @router.delete("/users/{username}/follow", response_model=FollowResponse, status_code=status.HTTP_200_OK)
+@limiter.limit('60/minute')
 async def unfollow_user(
+    request: Request,
     username: str,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
@@ -120,7 +125,9 @@ async def unfollow_user(
     )
 
 @router.get("/users/{username}/followers", response_model=List[UserPublic])
+@limiter.limit('60/minute')
 async def get_followers(
+    request: Request,
     username: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
@@ -148,7 +155,9 @@ async def get_followers(
     return followers
 
 @router.get("/users/{username}/following", response_model=List[UserPublic])
+@limiter.limit('60/minute')
 async def get_following(
+    request: Request,
     username: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),

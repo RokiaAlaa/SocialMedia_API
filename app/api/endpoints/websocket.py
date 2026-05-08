@@ -1,23 +1,33 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Depends, Query, HTTPException, status
 from sqlalchemy.orm import Session
 from app.api.deps.database import get_db
 from app.core.security import verify_access_token
 from app.models.user import User
 from app.services.websocket import manager
 import json
+import logging
+
+logger = logging.getLogger("app")
 
 router = APIRouter()
 
-@router.websocket('/ws/notifications')
+@router.websocket('/notifications')
 async def websocket_notifications(
     websocket: WebSocket,
     token: str = Query(...),
     db: Session = Depends(get_db)
 ):
     """WebSocket endpoint for real-time notifications"""
-    
-    token_data = await verify_access_token(token)
 
+    logger.info('WebSocket: attempting token verification')
+    credentials_exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+    try:
+        token_data = await verify_access_token(token, credentials_exception)
+        logger.info(f'Websocket: token verified, user_id={token_data.user_id}')
+    except HTTPException as e:
+        logger.error(f'Websocket: token failed: {e}')
+        await websocket.close(code=1008)
+        return 
 
     if not token_data or not token_data.user_id:
         await websocket.close(code=1008)
@@ -30,7 +40,9 @@ async def websocket_notifications(
         await websocket.close(code=1008)
         return
 
-    await manager.connect(user_id, websocket)
+    connected = await manager.connect(user_id, websocket)
+    if not connected:
+        return 
 
     try:
         await websocket.send_json({
@@ -70,8 +82,8 @@ async def websocket_notifications(
                 pass
 
     except WebSocketDisconnect:
-        manager.disconnect(user_id, websocket)
+        await manager.disconnect(user_id, websocket)
 
     except Exception as e:
-        print(f"Websocket error: {e}")
-        manager.disconnect(user_id, websocket)
+        logger.error(f"Websocket error: {e}")
+        await manager.disconnect(user_id, websocket)

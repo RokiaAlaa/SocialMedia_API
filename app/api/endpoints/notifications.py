@@ -1,18 +1,20 @@
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import desc, func
 from typing import List
-
 from app.api.deps.database import get_db
 from app.api.deps.auth import get_current_active_user
 from app.models.user import User
 from app.models.notification import Notification
 from app.schemas.notification import Notification as NotificationSchema, NotificationWithSender, UnreadCountResponse
+from app.core.limiter import limiter
 
 router = APIRouter()
 
 @router.get("/", response_model=List[NotificationWithSender])
+@limiter.limit('60/minute')
 async def get_notifications(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     unread_only: bool = False,
@@ -30,9 +32,10 @@ async def get_notifications(
 
     return notifications
 
-
 @router.get("/unread-count", response_model=UnreadCountResponse) 
+@limiter.limit('60/minute')
 async def get_unread_counts(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -45,9 +48,10 @@ async def get_unread_counts(
 
     return UnreadCountResponse(unread_count=count)
 
-
 @router.put("/read-all", status_code=status.HTTP_200_OK) 
+@limiter.limit('60/minute')
 async def mark_all_read(
+    request: Request,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
@@ -62,9 +66,10 @@ async def mark_all_read(
 
     return {"message": "All notifications marked as read"}
 
-
 @router.put("/{notification_id}/read", response_model=NotificationSchema) 
+@limiter.limit('60/minute')
 async def mark_notification_read(
+    request: Request,
     notification_id: int,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
@@ -88,9 +93,10 @@ async def mark_notification_read(
 
     return notification
 
-
 @router.delete("/{notification_id}", status_code=status.HTTP_204_NO_CONTENT) 
+@limiter.limit('60/minute')
 async def delete_notification(
+    request: Request,
     notification_id: int, 
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),

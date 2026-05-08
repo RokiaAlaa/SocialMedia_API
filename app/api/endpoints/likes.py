@@ -1,21 +1,23 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from typing import List
-
 from app.api.deps.database import get_db
 from app.api.deps.auth import get_current_active_user, get_optional_current_user
 from app.models.user import User
 from app.models.post import Post
-from app.models.like import Like, ReactionType
+from app.models.like import Like
 from app.schemas.like import Like as LikeSchema, LikeCreate, LikeWithUser, PostLikesResponse, ReactionCount
 from app.services.notification import create_notification
 from app.models.notification import NotificationType
+from app.core.limiter import limiter
 
 router = APIRouter()
 
 @router.post("/posts/{post_id}/like", response_model=LikeSchema, status_code=status.HTTP_201_CREATED)
+@limiter.limit('60/minute')
 async def like_post(
+    request: Request,
     post_id: int,
     like_in: LikeCreate,
     current_user: User = Depends(get_current_active_user),
@@ -64,7 +66,9 @@ async def like_post(
     return like
 
 @router.delete("/posts/{post_id}/like", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit('60/minute')
 async def unlike_post(
+    request: Request,
     post_id: int,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
@@ -88,7 +92,9 @@ async def unlike_post(
     return None
 
 @router.get("/posts/{post_id}/likes", response_model=PostLikesResponse)
+@limiter.limit('60/minute')
 async def get_post_likes(
+    request: Request,
     post_id: int,
     current_user: User = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
@@ -133,7 +139,9 @@ async def get_post_likes(
     )
 
 @router.get("/posts/{post_id}/likes/users", response_model=List[LikeWithUser])
+@limiter.limit('60/minute')
 async def get_post_likes_users(
+    request: Request,
     post_id: int,
     db: Session = Depends(get_db),
 ):

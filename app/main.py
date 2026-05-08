@@ -4,11 +4,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from slowapi import _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
-import os 
 from app.core.config import settings 
 from app.api.router import api_router
 from app.core.limiter import limiter
 from app.core.logging import logger
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
+import os 
 
 app = FastAPI(
     title=settings.APP_NAME,
@@ -21,9 +22,19 @@ app = FastAPI(
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
+allowed_origins = ['http://localhost:8000', 'http://localhost:3000']
+
+if settings.DEBUG:
+    allowed_origins.append("*")
+else:
+    app.add_middleware(
+        TrustedHostMiddleware,
+        allowed_hosts=['localhost', 'localhost:8000', 'localhost:3000', 'testserver']   
+    )
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=['http://localhost:8000', 'http://localhost:3000'],
+    allow_origins=allowed_origins,
     allow_credentials=True,
     allow_methods=['*'],
     allow_headers=['*']

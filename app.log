@@ -1,0 +1,15 @@
+2026-05-08 14:30:00,523 - httpx - INFO - HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-05-08 14:30:01,982 - httpx - INFO - HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-05-08 14:30:02,599 - httpx - INFO - HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-05-08 14:32:16,295 - httpx - INFO - HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-05-08 23:54:22,266 - httpx - INFO - HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-05-08 23:54:22,277 - app - INFO - WebSocket: attempting token verification
+2026-05-08 23:54:22,277 - app - INFO - Websocket: token verified, user_id=1
+2026-05-08 23:54:23,305 - app - INFO - WebSocket: attempting token verification
+2026-05-08 23:54:23,306 - app - ERROR - Websocket: token failed: 401: Unauthorized
+2026-05-08 23:54:24,141 - httpx - INFO - HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-05-08 23:54:24,146 - app - INFO - WebSocket: attempting token verification
+2026-05-08 23:54:24,146 - app - INFO - Websocket: token verified, user_id=1
+2026-05-08 23:54:25,087 - httpx - INFO - HTTP Request: POST http://testserver/api/v1/auth/login "HTTP/1.1 200 OK"
+2026-05-08 23:54:25,100 - app - INFO - WebSocket: attempting token verification
+2026-05-08 23:54:25,100 - app - INFO - Websocket: token verified, user_id=1

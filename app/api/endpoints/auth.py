@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from fastapi.security import OAuth2PasswordRequestForm 
 from app.api.deps.database import get_db
@@ -6,16 +6,18 @@ from app.api.deps.auth import oauth2_scheme
 from app.api.deps.auth import get_current_active_user
 from app.models.user import User
 from sqlalchemy import or_
-from app.schemas.user import User as UserSchema, UserCreate, UserUpdate
+from app.schemas.user import User as UserSchema, UserCreate
 from app.schemas.token import Token
 from app.core.config import settings
 from app.core.security import hash_password, verify_password, create_access_token
 from app.services.cache import redis_client
+from app.core.limiter import limiter
 
 router = APIRouter()
 
 @router.post("/register", response_model=UserSchema, status_code=status.HTTP_201_CREATED)
-async def register(user_in: UserCreate, db: Session = Depends(get_db)):
+@limiter.limit('5/minute')
+async def register(request: Request, user_in: UserCreate, db: Session = Depends(get_db)):
     """Register a new user"""
 
     existing_email = db.query(User).filter(user_in.email == User.email).first()
@@ -47,7 +49,8 @@ async def register(user_in: UserCreate, db: Session = Depends(get_db)):
 
 
 @router.post("/login", response_model=Token)
-async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
+@limiter.limit('5/minute')
+async def login(request: Request, form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
 
     """Login with email/username and password"""
     
@@ -71,13 +74,15 @@ async def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = 
 
 
 @router.get("/me", response_model=UserSchema)
-async def read_current_user(current_user: User = Depends(get_current_active_user)):
+@limiter.limit('60/minute')
+async def read_current_user(request: Request, current_user: User = Depends(get_current_active_user)):
 
     """Get current user profile"""
     return current_user
 
 @router.post("/logout")
-async def logout(token: str =  Depends(oauth2_scheme), current_user: User = Depends(get_current_active_user)):
+@limiter.limit('60/minute')
+async def logout(request: Request, token: str =  Depends(oauth2_scheme), current_user: User = Depends(get_current_active_user)):
 
     """Logout (client should delete token)"""
     

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Query, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc, or_
 from typing import List, Optional
@@ -10,15 +10,19 @@ from app.models.tag import Tag
 from app.models.like import Like
 from app.models.comment import Comment
 from app.models.follow import Follow
-from app.schemas.post import Post as PostSchema, PostCreate, PostUpdate, PostWithUser
+from app.schemas.post import PostCreate, PostUpdate, PostWithUser
 from app.services.upload import UploadService, CloudinaryService
 from app.utils.slug import generate_unique_slug
 from app.core.config import settings
+from app.services.cache import get_cached_post, set_cached_post, invalidate_cached_post, get_cached_posts_feed, get_cached_posts_list, set_cached_posts_feed, set_cached_posts_list
+from app.core.limiter import limiter
 
 router = APIRouter()
 
 @router.get("/", response_model=List[PostWithUser])
+@limiter.limit('60/minute')
 async def list_posts(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     search: Optional[str] = None,
@@ -27,6 +31,11 @@ async def list_posts(
     db: Session = Depends(get_db),
 ):
     """List all posts with filtering"""
+
+    cache_key = f"{skip}:{limit}:{search}:{tag}"
+    cached = await get_cached_posts_list(cache_key)
+    if cached:
+        return cached
 
     query = db.query(Post).filter(Post.is_published == True)
 
@@ -40,17 +49,26 @@ async def list_posts(
 
     posts = query.order_by(desc(Post.created_at)).offset(skip).limit(limit).all()
 
-    return [enrich_post(post, current_user, db) for post in posts]
-
+    result = [enrich_post(post, current_user, db) for post in posts]
+    serialized = [p.model_dump() for p in result]
+    await set_cached_posts_list(cache_key, serialized)
+    return result
 
 @router.get("/feed", response_model=List[PostWithUser])
+@limiter.limit('60/minute')
 async def get_feed(
+    request: Request,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
 ):
     """Get personalized feed (posts from followed users)"""
+
+    cache_key = f"{current_user.id}:{skip}:{limit}"
+    cached = await get_cached_posts_feed(cache_key)
+    if cached:
+        return cached
 
     following_ids = db.query(Follow.following_id).filter(
         Follow.follower_id == current_user.id
@@ -64,11 +82,15 @@ async def get_feed(
         Post.is_published == True
     ).order_by(desc(Post.created_at)).offset(skip).limit(limit).all()
 
-    return [enrich_post(post, current_user, db) for post in posts]
-
+    result = [enrich_post(post, current_user, db) for post in posts]
+    serialized = [p.model_dump() for p in result]
+    await set_cached_posts_feed(cache_key, serialized)
+    return result
 
 @router.get("/user/{username}", response_model=List[PostWithUser])
+@limiter.limit('60/minute')
 async def get_user_posts(
+    request: Request,
     username: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(20, ge=1, le=100),
@@ -96,14 +118,19 @@ async def get_user_posts(
 
     return [enrich_post(post, current_user, db) for post in posts]
 
-
 @router.get("/{post_id}", response_model=PostWithUser)
+@limiter.limit('60/minute')
 async def get_post(
+    request: Request,
     post_id: int,
     current_user: User = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
 ):
     """Get single post"""
+
+    cached = await get_cached_post(post_id)
+    if cached:
+        return cached
 
     post = db.query(Post).filter(Post.id == post_id).first()
     if not post:
@@ -115,11 +142,14 @@ async def get_post(
     post.view_count += 1
     db.commit()
 
-    return enrich_post(post, current_user, db)
+    result = enrich_post(post, current_user, db)
+    await set_cached_post(post_id, result.model_dump())
+    return result
  
-
 @router.post("/", response_model=PostWithUser, status_code=status.HTTP_201_CREATED)
+@limiter.limit('60/minute')
 async def create_post(
+    request: Request,
     post_in: PostCreate,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
@@ -153,11 +183,13 @@ async def create_post(
     db.commit() 
     db.refresh(post)
 
+    await invalidate_cached_post(post.id)
     return enrich_post(post, current_user, db)
 
-
 @router.post("/{post_id}/image", response_model=PostWithUser)
+@limiter.limit('60/minute')
 async def upload_post_image(
+    request: Request,
     post_id: int,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_active_user),
@@ -195,11 +227,13 @@ async def upload_post_image(
     db.commit()
     db.refresh(post)
 
+    await invalidate_cached_post(post.id)
     return enrich_post(post, current_user, db)
 
-
 @router.put("/{post_id}", response_model=PostWithUser)
+@limiter.limit('60/minute')
 async def update_post(
+    request: Request,
     post_id: int,
     post_update: PostUpdate,
     current_user: User = Depends(get_current_active_user),
@@ -246,11 +280,13 @@ async def update_post(
     db.commit()
     db.refresh(post)
 
+    await invalidate_cached_post(post.id)
     return enrich_post(post, current_user, db)
 
-
 @router.delete("/{post_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit('60/minute')
 async def delete_post(
+    request: Request,
     post_id: int,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
@@ -273,8 +309,8 @@ async def delete_post(
     db.delete(post)
     db.commit()
 
+    await invalidate_cached_post(post.id)
     return None
-
 
 def enrich_post(post: Post, current_user: Optional[User], db: Session) -> PostWithUser:
     """Add stats and current user context to post"""
@@ -294,6 +330,8 @@ def enrich_post(post: Post, current_user: Optional[User], db: Session) -> PostWi
     return PostWithUser.model_validate(
         {
             **post.__dict__,
+            'user': post.user,
+            'tags': post.tags,
             'likes_count': likes_count,
             'comments_count': comments_count,
             'is_liked': is_liked,

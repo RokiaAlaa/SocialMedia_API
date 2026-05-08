@@ -31,14 +31,14 @@ class TestUserProfiles:
             f'/api/v1/users/{test_user.username}',
             headers=user_headers,
             json={
-                'full_name': "New Name",
+                'fullname': "New Name",
                 'bio': 'New bio'
             }
         )
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
-        assert data['full_name'] == "New Name"
+        assert data['fullname'] == "New Name"
         assert data['bio'] == 'New bio'
 
     def test_update_password(self, client, test_user, user_headers):
@@ -78,7 +78,7 @@ class TestUserProfiles:
         response = client.put(
             f'/api/v1/users/{test_user2.username}',
             headers=user_headers,
-            json={'full_name': "Hacked Name"}
+            json={'fullname': "Hacked Name"}
         )
 
         assert response.status_code == status.HTTP_403_FORBIDDEN

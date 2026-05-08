@@ -4,6 +4,7 @@ from PIL import Image
 import aiofiles
 from app.core.config import settings
 from app.utils.slug import generate_filename
+
 class UploadService:
 
     @staticmethod
@@ -23,7 +24,7 @@ class UploadService:
         if ext not in allowed:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f'file type not allowed. Allowed: {', '.join(allowed)}'
+                detail=f"file type not allowed. Allowed: {', '.join(allowed)}"
             )
         
         return content
@@ -112,4 +113,4 @@ try:
             cloudinary.uploader.destroy(public_id)
 
 except ImportError:
-    cloudinaryService = None
+    CloudinaryService = None

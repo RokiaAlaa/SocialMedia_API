@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func
 from app.api.deps.database import get_db
@@ -10,11 +10,16 @@ from app.schemas.user import User as UserSchema, UserProfile, UserUpdate
 from app.services.upload import UploadService, CloudinaryService
 from app.core.security import hash_password
 from app.core.config import settings
+from app.core.limiter import limiter
+import logging
+
+logger = logging.getLogger("app")
 
 router = APIRouter()
-
 @router.get("/{username}", response_model=UserProfile)
+@limiter.limit('60/minute')
 async def get_user_profile(
+    request: Request,
     username: str,
     current_user: User = Depends(get_optional_current_user),
     db: Session = Depends(get_db),
@@ -53,9 +58,10 @@ async def get_user_profile(
 
     return profile
 
-
 @router.put("/{username}", response_model=UserSchema)
+@limiter.limit('60/minute')
 async def update_user_profile(
+    request: Request,
     username: str,
     user_update: UserUpdate,
     current_user: User = Depends(get_current_active_user),
@@ -103,9 +109,10 @@ async def update_user_profile(
 
     return current_user
 
-
 @router.put("/{username}/avatar", response_model=UserSchema)
+@limiter.limit('60/minute')
 async def upload_avatar(
+    request: Request,
     username: str,
     file: UploadFile = File(...),
     current_user: User = Depends(get_current_active_user),
@@ -126,7 +133,7 @@ async def upload_avatar(
             else:
                 UploadService.delete_local(current_user.avatar_url)
         except Exception as e:
-            print(f"Failed to delete old avatar: {e}")
+            logger.error(f"Failed to delete old avatar: {e}")
 
     try:
         if settings.CLOUDINARY_CLOUD_NAME and CloudinaryService:
@@ -145,9 +152,10 @@ async def upload_avatar(
 
     return current_user
 
-
 @router.delete("/{username}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit('60/minute')
 async def delete_user(
+    request: Request,
     username: str,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),

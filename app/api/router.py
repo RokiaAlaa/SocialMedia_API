@@ -19,4 +19,4 @@ api_router.include_router(tags.router, prefix='/tags', tags=['Tags'])
 
 api_router.include_router(notifications.router, prefix='/notifications', tags=['Notifications'])
 
-api_router.include_router(websocket.router, prefix='/WebSocket')
+api_router.include_router(websocket.router, prefix='/ws', tags=['WebSocket'])

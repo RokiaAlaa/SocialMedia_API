@@ -38,7 +38,11 @@ async def get_optional_current_user(token: str = Depends(oauth2_scheme_optional)
     if not token:
         return None
     
-    token_data = await verify_access_token(token)
+    try:
+        credentials_exception = HTTPException(status_code=status.HTTP_401_UNAUTHORIZED)
+        token_data = await verify_access_token(token, credentials_exception)
+    except HTTPException:
+        return None
 
     if token_data is None or token_data.user_id is None:
         return None

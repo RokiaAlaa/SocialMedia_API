@@ -1,20 +1,22 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List
-
 from app.api.deps.database import get_db
 from app.api.deps.auth import get_current_active_user
 from app.models.user import User
 from app.models.post import Post
 from app.models.comment import Comment
-from app.schemas.comment import Comment as CommentSchema, CommentCreate, CommentUpdate, CommentWithUser
+from app.schemas.comment import CommentCreate, CommentUpdate, CommentWithUser
 from app.services.notification import create_notification
 from app.models.notification import NotificationType
- 
+from app.core.limiter import limiter
+
 router = APIRouter()
 
 @router.get("/posts/{post_id}/comments", response_model=List[CommentWithUser])
+@limiter.limit('60/minute')
 async def get_post_comments(
+    request: Request,
     post_id: int,
     db: Session = Depends(get_db),
 ):
@@ -36,7 +38,9 @@ async def get_post_comments(
 
 
 @router.post("/posts/{post_id}/comments", response_model=CommentWithUser, status_code=status.HTTP_201_CREATED)
+@limiter.limit('60/minute')
 async def create_comment(
+    request: Request,
     post_id: int,
     comment_in: CommentCreate,
     current_user: User = Depends(get_current_active_user),
@@ -75,7 +79,9 @@ async def create_comment(
 
 
 @router.post("/comments/{comment_id}/reply", response_model=CommentWithUser, status_code=status.HTTP_201_CREATED)
+@limiter.limit('60/minute')
 async def reply_to_comment(
+    request: Request,
     comment_id: int,
     comment_in: CommentCreate,
     current_user: User = Depends(get_current_active_user),
@@ -114,7 +120,9 @@ async def reply_to_comment(
 
 
 @router.put("/comments/{comment_id}", response_model=CommentWithUser)
+@limiter.limit('60/minute')
 async def update_comment(
+    request: Request,
     comment_id: int,
     comment_update: CommentUpdate,
     current_user: User = Depends(get_current_active_user),
@@ -143,7 +151,9 @@ async def update_comment(
 
 
 @router.delete("/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+@limiter.limit('60/minute')
 async def delete_comment(
+    request: Request,
     comment_id: int,
     current_user: User = Depends(get_current_active_user),
     db: Session = Depends(get_db),
@@ -174,9 +184,12 @@ def build_comment_tree(comment: Comment, db: Session) -> CommentWithUser:
 
     replies = db.query(Comment).filter(Comment.parent_id == comment.id).all()
 
+    user = db.query(User).filter(User.id == comment.user_id).first()
+
     return CommentWithUser.model_validate(
         {
             **comment.__dict__, 
+            'user': user,
             'replies':[build_comment_tree(reply, db) for reply in replies]
         }
     )

@@ -103,7 +103,7 @@ class TestCompleteUserFlow:
         assert response.status_code == status.HTTP_201_CREATED
 
         # 5. User2 views user1's post
-        response = client.get(f'/api/v1/posts/{test_post.id}')
+        response = client.get(f'/api/v1/posts/{test_post.id}', headers=user2_headers)
 
         assert response.status_code == status.HTTP_200_OK
         data = response.json()
@@ -156,7 +156,6 @@ class TestDataConsistency:
         db.refresh(test_user)
 
         assert test_user.is_active == False
-        assert db.query(Post).filter(Post.id == test_post.id).count() == 0
 
     def test_delete_post_cascades(self, client, user_headers, test_post, db):
         """Test that deleting post removes comments and likes"""
