@@ -1,4 +1,3 @@
-# SocialMedia_API
 # Blog/Social Media API 🚀
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.109.0-009688.svg?style=flat&logo=FastAPI&logoColor=white)](https://fastapi.tiangolo.com)
