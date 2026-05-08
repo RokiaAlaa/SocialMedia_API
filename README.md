@@ -95,23 +95,10 @@ A production-ready RESTful API for a blog/social media platform with real-time f
 
 ---
 
-## 🏗️ Architecture
+## 🗄️ Database Schema
 
-### System Design
+<img width="1808" height="830" alt="Schema" src="https://github.com/user-attachments/assets/2d4108ab-238c-4699-8c2b-a8939d02c964" />
 
-```
-
-┌─────────────────────────────────────────────────────────┐ │ Client │ │ (Web/Mobile App or API Consumer) │ └────────────────────┬────────────────────────────────────┘ │ ┌──────────┴──────────┐ │ │ ▼ ▼ ┌─────────┐ ┌──────────┐ │ HTTP │ │WebSocket │ │ API │ │ WS │ └────┬────┘ └─────┬────┘ │ │ └──────────┬──────────┘ ▼ ┌──────────────────────┐ │ FastAPI App │ │ (Async/Await) │ └──────────┬───────────┘ │ ┌───────────┼───────────┐ ▼ ▼ ▼ ┌────────┐ ┌───────┐ ┌────────┐ │ Redis │ │PostgreSQL│ │Cloudinary│ │ Cache │ │ DB │ │ Storage│ │ PubSub │ │ │ │ │ └────────┘ └────────┘ └────────┘
-
-```
-
-### Database Schema
-
-```
-
-Users ──┬── Posts ──┬── Comments (self-referential for replies) │ ├── Likes (reactions) │ └── Tags (many-to-many) │ ├── Follows (self-referential) │ └── Notifications
-
-````
 
 ---
 
